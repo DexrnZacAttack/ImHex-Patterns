@@ -393,7 +393,9 @@ struct ExportsTable {
 	ExportDirectoryTable directoryTable;
 	ExportAddress exportAddressTable[directoryTable.addressesAmount] @ directoryTable.addressTableRVA - relativeVirtualDifference();
 	ExportNamePointer exportNamePointerTable[directoryTable.namePointersAmount] @ directoryTable.namePointerTableRVA - relativeVirtualDifference();
-	u16 exportOrdinalTable[directoryTable.namePointersAmount] @ directoryTable.ordinalTableRVA - relativeVirtualDifference();
+	if (directoryTable.ordinalTableRVA > relativeVirtualDifference()) {
+		u16 exportOrdinalTable[directoryTable.namePointersAmount] @ directoryTable.ordinalTableRVA - relativeVirtualDifference();
+	}
 	char imageName[] @ directoryTable.imageNameRVA - relativeVirtualDifference() [[format("formatNullTerminatedString")]];
 	$ = addressof(this)+coffHeader.optionalHeader.directories[0].size;
 };
@@ -1106,7 +1108,7 @@ struct Section {
 	currentSectionIndex += 1;													// Make the current section index the next section's index
 } [[name(sectionsTable[currentSectionIndex-1].name)]];
 
-Section sections[coffHeader.numberOfSections] @ coffHeader.optionalHeader.sizeOfHeaders;
+Section sections[coffHeader.numberOfSections] @ sectionsTable[0].ptrRawData;
 
 // Symbol & String Tables
 enum SectionNumberType : s16 {
@@ -1209,7 +1211,7 @@ struct StringTable {
 	SymbolString strings[while($ < addressof(this) + size)];
 } [[inline]];
 
-StringTable stringTable[checkForSymbols] @ addressof(symbolTable) + sizeof(symbolTable);
+StringTable stringTable[sizeof(symbolTable)>0] @ addressof(symbolTable) + sizeof(symbolTable);
 
 // Rich Header
 bool checkForRichHeader in;

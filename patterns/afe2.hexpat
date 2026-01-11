@@ -1,6 +1,10 @@
 #pragma author WerWolv
 #pragma description Nintendo Switch Atmosphère CFW Fatal Error log
 
+#pragma magic [ 41 46 45 30 ] @ 0x00
+#pragma magic [ 41 46 45 31 ] @ 0x00
+#pragma magic [ 41 46 45 32 ] @ 0x00
+
 #pragma endian little
 
 import std.io;
@@ -52,8 +56,8 @@ std::assert(ctx.magic == ATMOSPHERE_REBOOT_TO_FATAL_MAGIC   ||
        ctx.magic == ATMOSPHERE_REBOOT_TO_FATAL_MAGIC_1 ||
        ctx.magic == ATMOSPHERE_REBOOT_TO_FATAL_MAGIC_0,
        "File is not a valid Atmosphere fatal error binary!");
-	   
-std::assert_warn(ctx.magic == ATMOSPHERE_REBOOT_TO_FATAL_MAGIC, 
+
+std::assert_warn(ctx.magic == ATMOSPHERE_REBOOT_TO_FATAL_MAGIC,
            "Atmosphere fatal error binary is for an older version!");
 
 

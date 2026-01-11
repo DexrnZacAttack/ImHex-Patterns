@@ -47,9 +47,9 @@ namespace auto std::ptr {
     Example:
     A struct field called `p_myInfo` which is a nullable 64-bit pointer to an
     element of type `MyInfoTy` would be written as:
-    ```
+    ```rust
     struct MyStruct {
-      std::ptr::NullablePtr<MyInfoTy, u64> p_myInfo;
+        std::ptr::NullablePtr<MyInfoTy, u64> p_myInfo;
     }
     ```
     */
@@ -57,7 +57,7 @@ namespace auto std::ptr {
         // `pointerValue` is `no_unique_address` because we don't want to advance
         // the current memory location after reading the value of the pointer itself;
         // we want to examine the value at this address to determine what should be
-        // displayed. It's also `hidden` so the editor only displays either thee 
+        // displayed. It's also `hidden` so the editor only displays either thee
         // padding or the populated pointer/pointee field.
         PointerTy pointerValue [[no_unique_address, hidden]];
         if (pointerValue == 0x0) {

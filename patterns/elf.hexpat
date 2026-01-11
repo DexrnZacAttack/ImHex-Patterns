@@ -10,6 +10,7 @@
 import std.core;
 import std.io;
 import std.mem;
+import type.magic;
 
 using BitfieldOrder = std::core::BitfieldOrder;
 
@@ -472,9 +473,37 @@ bitfield SYMINFO_FLG {
     padding     : 10;
 };
 
+enum STT : u32 {
+    STT_NOTYPE     = 0,  /* Symbol type is unspecified */
+    STT_OBJECT     = 1,  /* Symbol is a data object */
+    STT_FUNC       = 2,  /* Symbol is a code object */
+    STT_SECTION    = 3,  /* Symbol associated with a section */
+    STT_FILE       = 4,  /* Symbol's name is file name */
+    STT_COMMON     = 5,  /* Symbol is a common data object */
+    STT_TLS        = 6,  /* Symbol is thread-local data object */
+    STT_NUM        = 7,  /* Number of defined types. */
+    STT_LOOS       = 10, /* Start of OS-specific */
+    STT_GNU_IFUNC  = 10, /* Symbol is indirect code object */
+    STT_HIOS       = 12, /* End of OS-specific */
+    STT_LOPROC     = 13, /* Start of processor-specific */
+    STT_HIPROC     = 15, /* End of processor-specific */
+};
+
+enum STB : u32 {
+    STB_LOCAL       = 0,  /* Local symbol */
+    STB_GLOBAL      = 1,  /* Global symbol */
+    STB_WEAK        = 2,  /* Weak symbol */
+    STB_NUM         = 3,  /* Number of defined types. */
+    STB_LOOS        = 10, /* Start of OS-specific */
+    STB_GNU_UNIQUE  = 10, /* Unique symbol. */
+    STB_HIOS        = 12, /* End of OS-specific */
+    STB_LOPROC      = 13, /* Start of processor-specific */
+    STB_HIPROC      = 15, /* End of processor-specific */
+};
+
 bitfield ST {
-    ST_BIND : 4;
-    ST_TYPE : 4;
+    STB ST_BIND : 4;
+    STT ST_TYPE : 4;
 } [[bitfield_order(BitfieldOrder::MostToLeastSignificant, 8)]];
 
 bitfield SHF {
@@ -496,14 +525,15 @@ bitfield SHF {
 };
 
 bitfield ELF32_R_INFO {
-    SYM  : 8;
-    TYPE : 8;
-} [[bitfield_order(BitfieldOrder::MostToLeastSignificant, 16)]];
+    TYPE    : 8;
+    SYM     : 8;
+    padding : 16;
+} [[bitfield_order(BitfieldOrder::LeastToMostSignificant, 32)]];
 
 bitfield ELF64_R_INFO {
-    SYM  : 32;
     TYPE : 32;
-} [[bitfield_order(BitfieldOrder::MostToLeastSignificant, 64)]];
+    SYM  : 32;
+} [[bitfield_order(BitfieldOrder::LeastToMostSignificant, 64)]];
 
 bitfield PF {
     X        : 1;
@@ -515,7 +545,7 @@ bitfield PF {
 };
 
 struct E_IDENT {
-    char EI_MAG[4];
+    type::Magic<"\x7fELF"> EI_MAG;
     EI_CLASS EI_CLASS;
     EI_DATA EI_DATA;
     EI_VERSION EI_VERSION;
@@ -565,7 +595,7 @@ struct Elf32_Phdr {
     Elf32_Word p_memsz;
     PF p_flags;
     Elf32_Word p_align;
-    
+
     if (p_offset >= 0 && p_filesz > 0 && (p_offset + p_filesz) <= std::mem::size() && p_filesz <= std::mem::size())
         u8 p_data[p_filesz] @ p_offset [[sealed]];
 };
@@ -579,7 +609,7 @@ struct Elf64_Phdr {
     Elf64_Xword p_filesz;
     Elf64_Xword p_memsz;
     Elf64_Xword p_align;
-    
+
     if (p_offset >= 0 && p_filesz > 0 && (p_offset + p_filesz) <= std::mem::size() && p_filesz <= std::mem::size())
         u8 p_data[p_filesz] @ p_offset [[sealed]];
 };
@@ -636,22 +666,25 @@ struct Elf32_Shdr {
     Elf32_Word sh_info;
     Elf32_Word sh_addralign;
     Elf32_Word sh_entsize;
-    
+
     if (sh_size > 0 && sh_offset + sh_size < std::mem::size()) {
     	if (sh_type == SHT::NOBITS || sh_type == SHT::NULL) {
 		// Section has no data
 		} else if (sh_type == SHT::STRTAB) {
 			String stringTable[while($ < (sh_offset + sh_size))] @ sh_offset;
-			stringTableIndex = std::core::array_index();	
 		} else if (sh_type == SHT::SYMTAB || sh_type == SHT::DYNSYM) {
 			Elf32_Sym symbolTable[sh_size / sh_entsize] @ sh_offset;
+		} else if (sh_type == SHT::REL) {
+			Elf32_Rel relTable[sh_size / sh_entsize] @ sh_offset;
+		} else if (sh_type == SHT::RELA) {
+			Elf32_Rela relaTable[sh_size / sh_entsize] @ sh_offset;
 		} else if (sh_type == SHT::INIT_ARRAY || sh_type == SHT::FINI_ARRAY) {
 			u32 pointer[while($ < (sh_offset + sh_size))] @ sh_offset;
 		} else {
 			u8 data[sh_size] @ sh_offset [[sealed]];
 		}
     }
-} [[format("format_section_header")]];;
+} [[format("format_section_header")]];
 
 struct Elf64_Chdr {
     u32 ch_type;
@@ -696,15 +729,18 @@ struct Elf64_Shdr {
     Elf64_Word sh_info;
     Elf64_Xword sh_addralign;
     Elf64_Xword sh_entsize;
-    
+
     if (sh_size > 0 && sh_offset + sh_size < std::mem::size()) {
     	if (sh_type == SHT::NOBITS || sh_type == SHT::NULL) {
 			// Section has no data
 		} else if (sh_type == SHT::STRTAB) {
 			String stringTable[while($ < (sh_offset + sh_size))] @ sh_offset;
-			stringTableIndex = std::core::array_index();	
 		} else if (sh_type == SHT::SYMTAB || sh_type == SHT::DYNSYM) {
 			Elf64_Sym symbolTable[sh_size / sh_entsize] @ sh_offset;
+		} else if (sh_type == SHT::REL) {
+			Elf64_Rel relTable[sh_size / sh_entsize] @ sh_offset;
+		} else if (sh_type == SHT::RELA) {
+			Elf64_Rela relaTable[sh_size / sh_entsize] @ sh_offset;
 		} else if (sh_type == SHT::INIT_ARRAY || sh_type == SHT::FINI_ARRAY) {
 			u32 pointer[while($ < (sh_offset + sh_size))] @ sh_offset;
 		} else {
@@ -715,7 +751,7 @@ struct Elf64_Shdr {
 
 fn format_section_header(auto shdr) {
 	u32 i = 0;
-	
+
 	u32 nameAddress = addressof(elf.shdr[stringTableIndex].stringTable) + shdr.sh_name;
 	String string @ nameAddress;
 
@@ -725,25 +761,32 @@ fn format_section_header(auto shdr) {
 
 struct ELF {
 	E_IDENT e_ident;
-	
+
 	if (e_ident.EI_DATA == EI_DATA::ELFDATA2LSB)
 		std::core::set_endian(std::mem::Endian::Little);
 	else
 		std::core::set_endian(std::mem::Endian::Big);
-	
+
 	if (e_ident.EI_CLASS == EI_CLASS::ELFCLASS32) {
 		Elf32_Ehdr ehdr;
+		stringTableIndex = ehdr.e_shstrndx;
 		Elf32_Phdr phdr[ehdr.e_phnum] @ ehdr.e_phoff;
 		Elf32_Shdr shdr[ehdr.e_shnum] @ ehdr.e_shoff;
 	} else if (e_ident.EI_CLASS == EI_CLASS::ELFCLASS64) {
 		Elf64_Ehdr ehdr;
+		stringTableIndex = ehdr.e_shstrndx;
 		Elf64_Phdr phdr[ehdr.e_phnum] @ ehdr.e_phoff;
 		Elf64_Shdr shdr[ehdr.e_shnum] @ ehdr.e_shoff;
 	}
 };
 
 ELF elf @ 0x00;
-
+EI_DATA endian @ 0x05 [[hidden]];
+match (endian) {
+    (EI_DATA::ELFDATA2LSB): std::core::set_endian(std::mem::Endian::Little);
+    (EI_DATA::ELFDATA2MSB): std::core::set_endian(std::mem::Endian::Big);
+    (_): std::core::set_endian(std::mem::Endian::Native);
+}
 
 fn gen_shdr_disp_name(ref auto pattern, str member_name, u8 member_index) {
     return std::format(

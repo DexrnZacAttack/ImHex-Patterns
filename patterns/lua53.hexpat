@@ -1,4 +1,5 @@
 #pragma description Lua 5.3 bytecode
+#pragma magic [ 1B 4C 75 61 53 ] @ 0x00
 
 import std.io;
 import type.base;
@@ -10,11 +11,11 @@ namespace impl {
         }
         return std::format("\"{}\"", string.data);
     };
-    
+
     fn format_Constant(auto constant) {
        return constant.data;
     };
-    
+
     fn format_Version(auto ver) {
        return std::format("Ver. {}.{}", ver.major, ver.minor);
     };
@@ -43,8 +44,15 @@ struct LuaBinaryHeader {
 struct LuaString {
     u8 size;
     if (size > 0) {
-        char data[size-1];
+        if (size == 0xff) {
+          u64 sizeReal;
+          char data[sizeReal-1];
+        } else {
+          char data[size-1];
+        }
     }
+    
+    
 }[[format("impl::format_LuaString")]];
 
 struct LuaConstant {

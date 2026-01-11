@@ -19,7 +19,7 @@ namespace old_binary {
     };
 
     fn format_time(u32 value) {
-        return std::time::format(std::time::to_utc(swap_32bit(value)));
+        return std::time::format(std::time::to_utc(old_binary::swap_32bit(value)));
     };
 
     using SwappedU32 = u32 [[transform("old_binary::swap_32bit"), format("old_binary::swap_32bit")]];
@@ -42,7 +42,7 @@ namespace old_binary {
             std::core::set_endian(std::mem::Endian::Little);
         else
             std::error("Invalid CPIO Magic!");
-        
+
         u16 dev;
         u16 ino;
         Mode mode;
@@ -59,7 +59,7 @@ namespace old_binary {
         CpioHeader header;
         char pathname[header.namesize % 2 == 0 ? header.namesize : header.namesize + 1];
         u8 data[header.filesize % 2 == 0 ? header.filesize : header.filesize + 1];
-        
+
         if (pathname == "TRAILER!!!\x00\x00")
             break;
     };

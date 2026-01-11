@@ -1,5 +1,6 @@
 #pragma endian little
 #pragma description Xilinx Zynq UltraScale+ Boot Image
+#pragma MIME application/x-xilinx-boot-zynqmp
 #pragma magic [ 58 4E 4C 58 ] @ 0x24
 
 // Spec: Xilinx UG1283 https://docs.xilinx.com/r/en-US/ug1283-bootgen-user-guide/Zynq-UltraScale-MPSoC-Boot-and-Configuration
@@ -212,7 +213,7 @@ namespace zynqmp {
 
         u64 destination_execution_address;
         u64 destination_load_address;
-        NullableWordPtr<std::Array<u8,parent.encrypted_partition_data_word_length*4>, u32> actual_partition_word_offset;
+        NullableWordPtr<std::Array<u8, encrypted_partition_data_word_length * 4>, u32> actual_partition_word_offset;
 
         PartitionAttributeBits attributes;
         u32 section_count;

@@ -1,4 +1,5 @@
 #pragma description Lua 5.2 bytecode
+#pragma magic [ 1B 4C 75 61 52 ] @ 0x00
 
 import std.io;
 import std.mem;
@@ -10,11 +11,11 @@ namespace impl {
         }
         return std::format("\"{}\"", string.data);
     };
-    
+
     fn format_Constant(auto constant) {
        return constant.data;
     };
-    
+
     fn format_Version(auto ver) {
        return std::format("Ver. {}.{}", ver.major, ver.minor);
     };

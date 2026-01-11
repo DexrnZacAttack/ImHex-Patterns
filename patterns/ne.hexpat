@@ -1,4 +1,6 @@
-#pragma description Microsoft DOS NE executable 
+#pragma author gmestanley
+#pragma description Microsoft DOS NE executable
+#pragma MIME application/x-ms-ne-executable
 
 import std.mem;
 
@@ -83,7 +85,7 @@ enum DGroupType : u8 {
 
 fn formatDGroupType(u8 value) {
 	DGroupType dgroup = value;
-	
+
 	return dgroup;
 };
 
@@ -96,7 +98,7 @@ enum AppType : u8 {
 
 fn formatAppType(u8 value) {
 	AppType app = value;
-	
+
 	return app;
 };
 
@@ -138,7 +140,7 @@ bitfield OS2EXEFlags {
 	gangloadArea : 1;
 };
 
-struct NEHeader { 
+struct NEHeader {
     char signature[2];
     u8 majorLinkerVersion;
     u8 minorLinkerVersion;

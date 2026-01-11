@@ -4,6 +4,7 @@
 #pragma MIME application/x-mach-binary
 
 import type.size;
+import std.string;
 
 enum Magic : u32 {
     _32BitMagic = 0xFEEDFACE,
@@ -230,7 +231,7 @@ struct Header {
     else if (cpuType == CpuType::BS32032 || cpuType == CpuType::BS32332 || cpuType == CpuType::NS32532) SubCpuType32XXX subCpuType;
     else if (cpuType == CpuType::I386 || cpuType == CpuType::X86_64) SubCpuTypeI386 subCpuType;
     else if (cpuType == CpuType::MIPS) SubCpuTypeMips subCpuType;
-    else if (cpuType == CpuType::HPPA) SubCpuTypeHPPA subCpuType;    
+    else if (cpuType == CpuType::HPPA) SubCpuTypeHPPA subCpuType;
     else if (cpuType == CpuType::ARM) SubCpuTypeARM subCpuType;
     else if (cpuType == CpuType::MC88000) SubCpuTypeMC88000 subCpuType;
     else if (cpuType == CpuType::MC98000) SubCpuTypeMC98000 subCpuType;
@@ -244,7 +245,7 @@ struct Header {
     u32 numCommands;
     type::Size<u32> sizeOfCommands;
     Flags flags;
-    
+
     if (magic == Magic::_64BitMagic) padding[sizeof(u32)];
 };
 
@@ -312,7 +313,7 @@ struct Section {
     u32 numRelocs;
     u32 flags;
     padding[8];
-    
+
     if (offset > 0)
         u8 data[size] @ offset [[sealed]];
 };
@@ -327,9 +328,9 @@ struct CommandSegment {
     u32 initProtection;
     u32 numSections;
     u32 flags;
-    
+
     Section sections[numSections];
-    
+
     if (fileOffset > 0)
         u8 data[fileSize] @ fileOffset [[sealed]];
 };
@@ -345,7 +346,7 @@ struct Section64 {
     u32 numRelocs;
     u32 flags;
     padding[12];
-    
+
     if (offset > 0)
         u8 data[size] @ offset [[sealed]];
 };
@@ -360,25 +361,51 @@ struct CommandSegment64 {
     u32 initProtection;
     u32 numSections;
     u32 flags;
-    
+
     Section64 sections[numSections];
-    
+
     if (fileOffset > 0)
         u8 data[fileSize] @ fileOffset [[sealed]];
+};
+
+struct lc_str { // NB: struct as opposed to it's union def in loader.h
+    u32 offset;
+    // It's important to note that the `ptr` field is not used in the Mach-O file itself.
+    // It is only relevant at runtime when the Mach-O file is loaded into memory.
+    // The Mach-O file uses the `offset` field to locate the string data within the file.
+};
+
+struct Dylib {
+    lc_str name; // always 24
+    u32 timestamp;
+    u32 current_version;
+    u32 compatibility_version;
+};
+
+struct LoadDyLib {
+    Dylib dylib [[inline]];
 };
 
 struct LoadCommand {
     Command command;
     type::Size<u32> commandSize;
-    
-    if (command == Command::UUID)
-        CommandUUID data;
-    else if (command == Command::Segment)
-        CommandSegment data;
-    else if (command == Command::Segment64)
-        CommandSegment64 data;
-    else
-        u8 data[commandSize - 8] [[sealed]];
+
+    match (command) {
+        (Command::UUID): CommandUUID data;
+        (Command::Segment): CommandSegment data;
+        (Command::Segment64): CommandSegment64 data;
+        (Command::LoadDyLib | Command::IdDyLib | Command::LoadWeakDyLib): {
+            LoadDyLib dylib;
+
+            // always 24 bytes in the struct
+            std::string::NullString dylib_name; 
+                                            
+            // the 1 is the size of the string terminator
+            // not using align here since according to the spec this is computed                                  
+            padding[commandSize - dylib.dylib.name.offset - 1 - std::string::length(dylib_name)];
+        }
+        (_): u8 data[commandSize - 8] [[sealed]];
+    }
 };
 
 struct MachO {

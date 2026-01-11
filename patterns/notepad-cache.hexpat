@@ -1,7 +1,8 @@
 #pragma author sethhall
 #pragma description Windows Notepad Cache Files
+#pragma magic [ 4E 50 00 ] @ 0x00
 
-// This was written based on the following blog post: 
+// This was written based on the following blog post:
 //    https://u0041.co/posts/articals/exploring-windows-artifacts-notepad-files/
 
 import type.leb128;

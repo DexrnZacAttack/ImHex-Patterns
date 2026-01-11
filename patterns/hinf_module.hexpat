@@ -1,11 +1,12 @@
 #pragma author Surasia
 #pragma description Halo Infinite Module
-#pragma array_limit 4294967295
-#pragma pattern_limit 4294967295
+#pragma array_limit 0
+#pragma pattern_limit 0
+#pragma magic [ 6D 6F 68 64 ] @ 0x00
 
 import std.string;
 
-struct ModuleHeader 
+struct ModuleHeader
 {
     char magic[4];
     s32 version;
@@ -68,7 +69,7 @@ struct Module
     ModuleFile files[module_header.fileCount];
     $ = $ + 8;
     s32 resources[module_header.resourceCount];
-    ModuleBlock blocks[module_header.blockCount]; 
+    ModuleBlock blocks[module_header.blockCount];
     padding[while($[$] == 0)];
     std::print("Compressed Tag Data starts at: {}", $);
 };

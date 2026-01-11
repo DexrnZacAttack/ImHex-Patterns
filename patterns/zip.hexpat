@@ -4,43 +4,65 @@
 
 import std.mem;
 import std.math;
+import std.core;
 import type.time;
 
-struct EndOfCentralDirectory {
-    u32 headerSignature [[comment("EoCD magic"), name("EoCD PK\\5\\6")]];
-    u16 diskNum [[comment("Number of this disk "), name("Disk Number")]];
-    u16 diskStart [[comment("Disk where central directory starts "), name("Central Directory Disk Number")]];
-    u16 CDRCount [[comment("Number of central directory records on this disk"), name("Central Directory Entries")]];
-    u16 CentralDirectoryRecordCount [[comment("Total number of entries in the central directory"), name("Total Central Directory Entries")]];
-    u32 CDSize [[comment("Size of central directory (bytes)"), name("Central Directory Size")]];
-    u32 CDOffset [[comment("Offset of start of central directory, relative to start of archive"), name("Central Directory Offset")]];
-    u16 commentLength [[color("00000000")]];
-    char coment[commentLength] [[name("Comment")]];
+
+using CentralDirectoryFileHeader;
+
+
+struct EOCD64Locator {
+    u32 headerSignature [[comment("EoCD magic"), name("EoCD PK\\6\\7")]];
+    u32 cdrDisk [[comment("Disk number containing the end of central directory record"), name("CDR Disk")]];
+    u64 eocdOffset [[comment("Offset of end of central directory record"), name("End of Central Directory Record Offset")]];
+    u32 totalDisks [[comment("Total number of disks"), name("Total Disks")]];
 };
 
+struct EndOfCentralDirectory {
+    u32 magic;
+
+    if (magic == 0x06064b50) {
+        u64 eocdSize [[comment("Size of fixed fields + size of variable data - 12"), name("EOCD Size")]];
+        u16 madeByVersion [[comment("The version of zip this was authored by"), name("Made By Version")]];
+        u16 versionNeeded [[comment("The minimum supported ZIP version needed to extract the file"), name("Version Needed")]];
+        u32 diskNum [[comment("number of this disk"), name("Disk Number")]];
+        u32 diskStart [[comment("Disk where central directory starts "), name("Central Directory Disk Number")]];
+        u64 CDRCount [[comment("Number of central directory records on this disk"), name("Central Directory Entries")]];
+        u64 CentralDirectoryRecordCount [[comment("Total number of entries in the central directory"), name("Total Central Directory Entries")]];
+        u64 CDSize [[comment("Size of central directory (bytes)"), name("Central Directory Size")]];
+        u64 CDOffset [[comment("Offset of start of central directory, relative to start of archive"), name("Central Directory Offset")]];
+        char extra[eocdSize - 44] [[comment("zip64 extensible data sector"), name("Extra Data")]];
+        EOCD64Locator locator [[name("EOCD Locator")]];
+        char eocd32[20] [[name("EOCD32")]];
+        u16 commentLength [[color("00000000")]];
+        char coment[commentLength] [[name("Comment")]];
+        CentralDirectoryFileHeader centralDirHeaders[CDRCount] @ (CDOffset) [[name("Files")]];
+    } else if (magic == 0x06054B50) {
+        u16 diskNum [[comment("Number of this disk "), name("Disk Number")]];
+        u16 diskStart [[comment("Disk where central directory starts "), name("Central Directory Disk Number")]];
+        u16 CDRCount [[comment("Number of central directory records on this disk"), name("Central Directory Entries")]];
+        u16 CentralDirectoryRecordCount [[comment("Total number of entries in the central directory"), name("Total Central Directory Entries")]];
+        u32 CDSize [[comment("Size of central directory (bytes)"), name("Central Directory Size")]];
+        u32 CDOffset [[comment("Offset of start of central directory, relative to start of archive"), name("Central Directory Offset")]];
+        u16 commentLength [[color("00000000")]];
+        char coment[commentLength] [[name("Comment")]];
+        if (CDOffset != 0xFFFFFFFF && CentralDirectoryRecordCount != 0xFFFF) {
+            CentralDirectoryFileHeader centralDirHeaders[CDRCount] @ (CDOffset) [[name("Files")]];
+        }
+    } else {
+      std::error("Invalid EOCD magic!");
+    }
+};
 
 namespace extra {
-    
-    bitfield Flags {
+
+    bitfield UTFlags {
           bool modification_time_set : 1;
-          bool access_time_set : 1; 
+          bool access_time_set : 1;
           bool creation_time_set : 1;
           reserved: 5;  //reserved for additional timestamps; not set
     };
-    
-    struct X5455_ExtendedTimestamp {    
-        Flags Flags;
-        if (Flags.modification_time_set){
-            u32 ModTime;
-        }
-        if (Flags.access_time_set){
-            u32 AcTime;
-        }
-        if (Flags.creation_time_set){
-            u32 CrTime;
-        }
-    };
-    
+
     struct X000A_NTFS {
         u32 reserved;
         u16 tag;
@@ -50,8 +72,8 @@ namespace extra {
         type::FILETIME AcTime;
         type::FILETIME CrTime;
     };
-    
-    struct X7875_NewUnix {    
+
+    struct X7875_NewUnix {
         u16 tag;
         u16 TSize;
         u8 version;
@@ -60,7 +82,7 @@ namespace extra {
         u8 GIDSize;
         u8 GID[GIDSize];
     };
-         
+
     struct X5855_InfoZipUnix {
         u32 AcTime;
         u32 ModTime;
@@ -71,59 +93,98 @@ namespace extra {
             u16 GID;
         }
     };
-    
+
+    struct ZIP64_SizeInfo {
+        u64 uncompressedSize;
+        u64 compressedSize;
+        if (parent.TSize > 16){
+            u64 localHeaderOffset;;
+        }
+        if (parent.TSize > 24){
+            u32 diskStartNumber;
+        }
+    };
+
     struct ExtraField {
         u16 tag;
         u16 TSize;
-        if (tag == 0x5455){
-            extra::X5455_ExtendedTimestamp x5455_ExtendedTimestamp;
-        }else if (tag == 0x000a){
+
+        if (tag == 0x0001) {
+            extra::ZIP64_SizeInfo ZIP64_SizeInfo;
+        } else if (tag == 0x5455) {
+            // 0x5455 needs parsed with TSize in context to prevent overshoot from mismatched TSize/flags set
+            UTFlags Flags;
+            u64 extraEndFromFlags = $ + 4*(Flags.modification_time_set + Flags.access_time_set + Flags.creation_time_set);
+            u64 extraEndFromTSize = $ + TSize - 1;
+            u64 extraEnd = std::math::min(extraEndFromFlags, extraEndFromTSize);
+
+            if ( ($ < extraEnd) && Flags.modification_time_set) {
+                type::time32_t ModTime;
+            }
+
+            if ( ($ < extraEnd) && Flags.access_time_set) {
+                type::time32_t AcTime;
+            }
+
+            if ( ($ < extraEnd) && Flags.creation_time_set) {
+                type::time32_t CrTime;
+            }
+        } else if (tag == 0x000a) {
             extra::X000A_NTFS x000A_NTFS;
-        }else if (tag == 0x7875){
+        } else if (tag == 0x7875) {
             extra::X7875_NewUnix x7875_NewUnix;
-        }else if (tag == 0x5855){
+        } else if (tag == 0x5855) {
             extra::X5855_InfoZipUnix x5855_InfoZipUnix;
-        }else{    
+        } else {
             std::print("Unsupported tag 0x{:02X}", tag);
             padding[TSize];
         }
     };
+    
+    fn has_extra_field(u32 extraEnd) {
+        if ($ + 4 > extraEnd) return false;
+        u16 tag = std::mem::read_unsigned($, 2, std::mem::Endian::Little);
+        u16 len = std::mem::read_unsigned($ + 2, 2, std::mem::Endian::Little);
+        return !(tag == 0 || len == 0) && $ + 4 + len <= extraEnd;
+    };
 }
 
 fn find_eocd() {
-    // If there is no zip comment, which is the common case,
-    // the end-of-central-directory record will be 22 bytes long
-    // at the end of the file; check if size-22 has the signature.
-    if (std::mem::read_unsigned(std::mem::size()-22, 4, std::mem::Endian::Little) == 0x06054B50) {
-        return std::mem::size()-22;
-    } else {
-        // If it's not there, then there's probably a zip comment;
-        // search the last 64KB of the file for the signature.        
-        u128 offset_search_from = std::math::max(0, std::mem::size()-65536-22);
-        u128 prev_address;
-        while(1){
-            u128 current_address = std::mem::find_sequence_in_range(0, offset_search_from, std::mem::size(), 0x50,0x4B,0x05,0x06); 
-            
-            //Reached EOF and did not find valid eocd.
-            if (current_address == 340282366920938463463374607431768211455){
-                std::error("Could not find EOCD.");
+    u128 offset_search_from = std::math::max(0, std::mem::size()-65536);
+    u128 prev_address;
+    while(1){
+        s128 current_address = std::mem::find_sequence_in_range(0, offset_search_from, std::mem::size(), 0x50,0x4B,0x05,0x06);
+
+        //Reached EOF and did not find valid eocd.
+        if (current_address == -1) {
+            std::error("Could not find EOCD.");
+        }
+
+        //Potential eocd found. Create a eocd struct
+        EndOfCentralDirectory EOCD32 @ current_address;
+
+        if (EOCD32.CDOffset == 0xFFFFFFFF || EOCD32.CentralDirectoryRecordCount == 0xFFFF) {
+            // this is a zip64 file
+            if (std::mem::read_unsigned(current_address - 20, 4, std::mem::Endian::Little) == 0x07064B50){
+                EOCD64Locator locator @ current_address - 20;
+                EndOfCentralDirectory EOCD64 @ locator.eocdOffset;
+                //If central directory file header is valid, then we know the eocd offset is valid.
+                if (std::mem::read_unsigned(EOCD64.CDOffset, 4, std::mem::Endian::Little) == 0x2014B50){
+                    return locator.eocdOffset;
+                }
             }
-            
-            //Potential eocd found. Create a eocd struct
-            EndOfCentralDirectory EOCD @ current_address;
-            
+        } else {
             //If central directory file header is valid, then we know the eocd offset is valid.
-            if (std::mem::read_unsigned(EOCD.CDOffset, 4, std::mem::Endian::Little) == 0x2014B50){
+            if (std::mem::read_unsigned(EOCD32.CDOffset, 4, std::mem::Endian::Little) == 0x2014B50){
                 return current_address;
             }
-            
-            offset_search_from = current_address + 1;
-            prev_address = current_address;
         }
+
+        offset_search_from = current_address + 1;
+        prev_address = current_address;
     }
 };
 
-EndOfCentralDirectory fileInfo @ find_eocd() [[name("End of Central Directory Record")]];
 
 enum CompressionMethod : u16 {
   None = 0,              // The file is stored (no compression)
@@ -170,13 +231,14 @@ bitfield GeneralPurposeBitFlags {
     reservedPKWARE_1 : 2;
 };
 
+
 struct LocalFileHeader {
     u32 headerSignature [[name("LCF PK\\3\\4")]];
     u16 version [[ comment("The minimum supported ZIP specification version needed to extract the file") ]];
     GeneralPurposeBitFlags generalPurposeBitFlags  [[ comment("General purpose bit flag") ]];
     CompressionMethod compressionMethod [[ comment("Compression method") ]];
-    u16 lastModifyTime [[ comment("File last modification time") ]];
-    u16 lastModifyDate [[ comment("File last modification date") ]];
+    type::DOSTime lastModifyTime [[ comment("File last modification time") ]];
+    type::DOSDate lastModifyDate [[ comment("File last modification date") ]];
     u32 crc32 [[ comment("CRC-32") ]];
     u32 compressedSize [[ comment("Compressed size") ]];
     u32 uncompressedSize [[ comment("Uncompressed size") ]];
@@ -184,13 +246,34 @@ struct LocalFileHeader {
     u16 extraFieldLength [[ comment("Extra field length (m)") ]];
     char fileName[fileNameLength] [[ comment("File Name") ]];
     u64 extraEnd = $ + extraFieldLength;
-    extra::ExtraField extraFields[while ($ < extraEnd)] [[comment("Extra Fields")]];
-    u8 data[compressedSize] [[name("File Data")]];
+    extra::ExtraField extraFields[while (extra::has_extra_field(extraEnd))] [[comment("Extra Fields")]];
+    padding[extraEnd - $];
+    u8 data[get_file_data_size(compressionMethod, compressedSize, uncompressedSize, extraFields)] [[name("File Data")]];
 };
 
-union File {
-    u32 fileOffset [[comment("Offset of local file header, relative to the start of the first disk on which the file occurs.")]];
-    LocalFileHeader *fileHeader : u32;
+fn get_file_data_size(CompressionMethod compressionMethod, u32 compressedSize, u32 uncompressedSize, ref extra::ExtraField extraFields) {
+    u32 size = 0;
+    if (compressionMethod == CompressionMethod::None) {
+        size = uncompressedSize;
+    } else {
+        size = compressedSize;
+    }
+
+    if (size != 0xFFFFFFFF) {
+        return size;
+    }
+    
+    u32 extraSize = std::core::member_count(extraFields);
+    for (u32 i = 0, i < extraSize, i += 1) {
+        if (extraFields[i].tag == 0x0001) {
+            if (compressionMethod == CompressionMethod::None) {
+                return extraFields[i].ZIP64_SizeInfo.uncompressedSize;
+            } else {
+                return extraFields[i].ZIP64_SizeInfo.compressedSize;
+            }
+        }
+    }
+    return 0;
 };
 
 struct CentralDirectoryFileHeader {
@@ -199,8 +282,8 @@ struct CentralDirectoryFileHeader {
     u16 versionExtract [[comment("Minimum version needed to extract")]];
     GeneralPurposeBitFlags generalPurposeBitFlags [[comment("General purpose bit flag")]];
     CompressionMethod compressionMethod;
-    u16 fileLastModifyTime [[comment("File last modification time")]];
-    u16 fileLastModifyDate [[comment("File last modification date")]];
+    type::DOSTime fileLastModifyTime [[comment("File last modification time")]];
+    type::DOSDate fileLastModifyDate [[comment("File last modification date")]];
     u32 crc32 [[comment("CRC-32 of uncompressed data")]];
     u32 compressedSize;
     u32 uncompressedSize;
@@ -210,11 +293,30 @@ struct CentralDirectoryFileHeader {
     u16 diskNumber [[comment("Disk number where file starts")]];
     u16 internalFileAttributes;
     u32 externalFileAttributes;
-    File file;
+    u32 localHeaderOffset;
     char fileName[fileNameLength];
     u64 extraEnd = $ + extraFieldLength;
-    extra::ExtraField extraFields[while ($ < extraEnd)] [[comment("Extra Fields")]];
-    char comment[fileCommentLength];
+    extra::ExtraField extraFields[while (extra::has_extra_field(extraEnd))] [[comment("Extra Fields")]];
+    padding[extraEnd - $];
+    char comment[fileCommentLength] @ extraEnd;
+    LocalFileHeader localFileHeader @ get_local_header_offset(localHeaderOffset, extraFields) [[name("Local File Header")]];
 };
 
-CentralDirectoryFileHeader centralDirHeaders[fileInfo.CDRCount] @ (fileInfo.CDOffset) [[name("Files")]];
+fn get_local_header_offset(u32 localHeaderOffset, ref extra::ExtraField extraFields) {
+    u32 size = 0;
+    if (localHeaderOffset != 0xFFFFFFFF) {
+        return localHeaderOffset;
+    }
+
+    u32 extraSize = std::core::member_count(extraFields);
+    for (u32 i = 0, i < extraSize, i += 1) {
+        if (extraFields[i].tag == 0x0001) {
+            return extraFields[i].ZIP64_SizeInfo.localHeaderOffset;
+        }
+    }
+
+    std::error("No valid local header offset found!");
+};
+
+
+EndOfCentralDirectory fileInfo @ find_eocd() [[name("End of Central Directory Record")]];

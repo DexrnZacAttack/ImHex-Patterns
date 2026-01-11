@@ -1,5 +1,6 @@
 #pragma author WerWolv
 #pragma description DOOM WAD Archive
+#pragma magic [ 50 57 41 44 ] @ 0x00
 
 import type.magic;
 import type.size;
@@ -13,7 +14,7 @@ struct FileLump {
     u32 filePos;
     type::Size<u32> size;
     char name[8];
-    
+
     u8 data[size] @ filePos [[sealed]];
 };
 

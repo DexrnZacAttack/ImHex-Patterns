@@ -1,5 +1,6 @@
 #pragma author WerWolv
 #pragma description USB Flashing Format (.uf2)
+#pragma magic [ 55 46 32 0A 57 51 5D 9E ] @ 0x00
 
 import std.sys;
 import std.mem;
@@ -131,7 +132,7 @@ struct UF2_ExtensionTag {
 	u8 size;
 	UF2_TagType type;
 	u8 data[size - 4];
-	
+
 	if (size == 0 && type.bytes[0] == 0x00 && type.bytes[1] == 0x00 && type.bytes[2] == 0x00)
 		break;
 };
@@ -144,26 +145,26 @@ struct UF2_Block {
     u32 payloadSize;
     u32 blockNo;
     u32 numBlocks;
-    
+
     if (flags.FamilyIDPresent)
     	UF2_FamilyID familyId;
     else
     	u32 fileSize;
-    
+
     if (flags.MD5ChecksumPresent) {
     	u8 data[452];
-    	UF2_Hash hash; 
+    	UF2_Hash hash;
     }
     else {
     	u8 data[476];
     }
-    
+
     if (flags.ExtensionTagsPresent) {
 		UF2_ExtensionTag extensionTags[0xFF];
     }
-    
+
     u32 magicEnd;
-    
+
     std::assert(magicStart0 == "UF2\n", "Invalid magicStart0 value!");
     std::assert(magicStart1 == 0x9E5D5157, "Invalid magicStart1 value!");
     std::assert(magicEnd == 0x0AB16F30, "Invalid magicEnd value!");

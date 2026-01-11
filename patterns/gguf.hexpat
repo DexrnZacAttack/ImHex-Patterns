@@ -3,6 +3,7 @@
 
 #pragma description ggml GGUF v3
 #pragma authors @leonjza, jessie @ imhex discord
+#pragma magic [ 47 47 55 46 ] @ 0x00
 
 #pragma pattern_limit 300000
 
@@ -85,7 +86,7 @@ struct gguf_string_t {
 struct gguf_metadata_value_t {
     gguf_metadata_value_type type;
     u64 length;
-    
+
     match(type) {
         (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_UINT8): u8 value[length];
         (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_INT8): s8 value[length];
@@ -117,7 +118,7 @@ struct gguf_metadata_value {
         (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_STRING): gguf_string_t value;
         (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_UINT64): u64 value;
         (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_FLOAT64): double value;
-        (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_ARRAY): gguf_metadata_value_t value;       
+        (gguf_metadata_value_type::GGUF_METADATA_VALUE_TYPE_ARRAY): gguf_metadata_value_t value;
     }
 };
 
@@ -132,7 +133,7 @@ struct gguf_metadata_kv_t {
     // The type of the value.
     // Must be one of the `gguf_metadata_value_type` values.
     // gguf_metadata_value_type value_type;
-    
+
     // The value.
     gguf_metadata_value value;
 };

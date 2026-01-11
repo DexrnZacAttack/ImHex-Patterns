@@ -10,6 +10,7 @@ import std.mem;
 import std.string;
 import std.time;
 import std.io;
+import type.magic;
 
 struct TableDirectory {
     char tag[4];
@@ -47,7 +48,6 @@ struct LongDatetime {
     s64 time;
 } [[format("format_longdatetime")]];
 
-using HeadTable;
 
 u64 currentOffset;
 u64 currentLength;
@@ -55,7 +55,7 @@ u64 glyfStart;
 bool hasPostScriptOutlines = false;
 u16 numHMetrics;
 u16 gNumGlyphs;
-HeadTable headTable;
+s16 indexToLocFormat;
 
 // begin avar
 
@@ -159,7 +159,7 @@ struct CmapSubtable12 : BaseCmapSubtable {
 
 struct CmapSubtable {
     u16 format = std::mem::read_unsigned($, 2, std::mem::Endian::Big);
-    
+
     match (format) {
         (0): CmapSubtable0 table [[inline]];
         (2): CmapSubtable2 table [[inline]];
@@ -184,13 +184,8 @@ struct EncodingRecord {
     CmapPlatform platformId;
     u16 encodingId;
     u32 offset;
-    
-    u64 endEncodingRecord = $;
-    $ = startOfCmapTable + offset;
-    
-    CmapSubtable subtable;
-    
-    $ = endEncodingRecord;
+
+    CmapSubtable subtable @ startOfCmapTable + offset;
 };
 
 struct CmapTable {
@@ -334,7 +329,7 @@ struct CompositeGlyphTable : GlyphTableHeader {
 
 struct GlyfTable {
     s16 type = std::mem::read_signed($, 2, std::mem::Endian::Big);
-    
+
     if (type >= 0) {
         SimpleGlyphTable table [[inline]];
     } else {
@@ -397,7 +392,7 @@ struct HeadTable {
     FixedPoint32 version;
     FixedPoint32 fontRevision;
     u32 checksumAdjustment;
-    u32 magic;
+    type::Magic<"\x5f\x0f\x3c\xf5"> magicNumber;
     HeadFlag flags;
     u16 unitsPerEm;
     LongDatetime created;
@@ -467,16 +462,13 @@ struct GlyfWithOffset<auto longOffset> {
         u32 nextOff = u32(std::mem::read_unsigned($, 2, std::mem::Endian::Big)) * 2;
     }
     curGlyfSize = nextOff - realOffset;
-    u64 prev = $;
-    $ = glyfStart + realOffset;
     if (curGlyfSize != 0) {
-        GlyfTable glyf;
+        GlyfTable glyf @ glyfStart + realOffset;
     }
-    $ = prev;
 };
 
 struct LocaTable {
-    if (headTable.indexToLocFormat == 1) {
+    if (indexToLocFormat == 1) {
         //u32 offsets[gNumGlyphs + 1];
         GlyfWithOffset<true> glyfs[gNumGlyphs];
     } else {
@@ -522,19 +514,13 @@ struct NameRecord {
     u16 nameId;
     u16 length;
     u16 stringOffset;
-    u64 cur = $;
-    $ = curStorageOffset + stringOffset;
-    char16 string[length / 2];
-    $ = cur;
+    char16 string[length / 2] @ curStorageOffset + stringOffset;
 };
 
 struct LangTagRecord {
     u16 length;
     u16 langTagOffset;
-    u64 cur = $;
-    $ = curStorageOffset + langTagOffset;
-    char16 langTag[length / 2];
-    $ = cur;
+    char16 langTag[length / 2] @ curStorageOffset + langTagOffset;
 };
 
 struct NameTableV0 {
@@ -553,7 +539,7 @@ struct NameTableV1 : NameTableV0 {
 
 struct NameTable {
     u16 version = std::mem::read_unsigned($, 2, std::mem::Endian::Big);
-    
+
     match (version) {
         (0): NameTableV0 table [[inline]];
         (_): NameTableV1 table [[inline]];
@@ -613,7 +599,7 @@ struct OS2TableV5 : OS2TableV4 {
 
 struct OS2Table {
     u16 version = std::mem::read_unsigned($, 2, std::mem::Endian::Big);
-    
+
     match (version) {
         (0): OS2TableV0 table [[inline]];
         (1): OS2TableV1 table [[inline]];
@@ -648,10 +634,10 @@ struct PostTableV2 : PostTableV1 {
 struct PostTable {
     u16 major = std::mem::read_unsigned($, 2, std::mem::Endian::Big);
     u16 minor = std::mem::read_unsigned($ + 2, 2, std::mem::Endian::Big);
-    
+
     match (major, minor) {
         (2, 0): PostTableV2 table [[inline]];
-        (_, _): PostTableV1 table [[inline]]; 
+        (_, _): PostTableV1 table [[inline]];
     }
 };
 
@@ -670,7 +656,7 @@ struct HiddenForPreprocessing {
         ("maxp"): MaxpTable table;
         ("head"): {
             HeadTable table;
-            headTable = table;
+            indexToLocFormat = table.indexToLocFormat;
         }
         ("glyf"): {
             glyfStart = $;
@@ -715,11 +701,9 @@ struct TTF {
     u16 searchRange;
     u16 entrySelector;
     u16 rangeShift;
-    
-    u64 start = $;
-    HiddenForPreprocessing hidden[numTables] [[hidden]];
-    $ = start;
-    
+
+    HiddenForPreprocessing hidden[numTables] @ $ [[hidden]];
+
     Table tables[numTables];
 };
 

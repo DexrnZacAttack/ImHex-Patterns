@@ -72,4 +72,38 @@ namespace auto hex::dec {
         return builtin::hex::dec::lz4_decompress(pattern, section, frame);
     };
 
+    /**
+        Decompresses the bytes of a pattern into a section using the LZF algorithm.
+        The original algorithm implementation can be found at http://software.schmorp.de/pkg/liblzf.html (use the Wayback Machine if the link is currently unavailable).
+        @param pattern The pattern whose bytes should be decompressed
+        @param section The section to decompress the data into
+        @return The number of bytes read from the input if successful, 0 otherwise
+    */
+    fn lzf_decompress(ref auto pattern, std::mem::Section section) {
+        return builtin::hex::dec::lzf_decompress(pattern, section);
+    };
+
+    /**
+        Decodes a byte sequence into a string using a custom Thingy encoding definition
+        @param bytes The bytes to decode
+        @param encoding A string containing a Thingy encoding definition, e.g. as loaded through std::file
+        @return The decoded string
+    */
+    fn decode(auto bytes, str encoding) {
+        return builtin::hex::dec::decode(bytes, encoding);
+    };
+
+    /**
+        Encodes a string into a byte sequence using a custom Thingy encoding definition.
+        Throws an error if the encoding is ambiguous (multiple byte sequences decoding to the
+        same value, or one decoded value being a prefix of another one), or if the string
+        contains a character sequence that has no representation in the given encoding.
+        @param string The string to encode
+        @param encoding A string containing a Thingy encoding definition, e.g. as loaded through std::file
+        @return A string containing the raw encoded bytes (not necessarily valid text)
+    */
+    fn encode(str string, str encoding) {
+        return builtin::hex::dec::encode(string, encoding);
+    };
+
 }
